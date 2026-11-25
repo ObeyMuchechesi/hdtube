@@ -11,13 +11,31 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from downloader import JobManager, probe_env, inspect_target, split_for_fat32, FFMPEG
-
 ROOT = Path(__file__).resolve().parent
 UI = ROOT / "ui"
-DEFAULT_OUT = Path.home() / "Videos" / "HDTube"
 
-MANAGER = JobManager(DEFAULT_OUT)
+# On a cloud host like Vercel the filesystem is read-only and functions are
+# stateless, so we cannot create a ~/Videos/HDTube output directory eagerly.
+# Use /tmp for writes if PORT is set, otherwise the user's Videos folder.
+if os.environ.get("PORT"):
+    DEFAULT_OUT = Path("/tmp/hdtube-out")
+    _VERCEL = True
+else:
+    DEFAULT_OUT = Path.home() / "Videos" / "HDTube"
+    _VERCEL = False
+
+try:
+    from downloader import JobManager, probe_env, inspect_target, split_for_fat32, FFMPEG
+    MANAGER = JobManager(DEFAULT_OUT)
+except Exception as _import_err:
+    # Degrade gracefully on serverless hosts where yt-dlp/ffmpeg cannot import
+    JobManager = None  # type: ignore
+    probe_env = lambda: {"yt_dlp": False, "ffmpeg": None, "error": str(_import_err)}  # type: ignore
+    inspect_target = lambda path: {"error": str(_import_err)}  # type: ignore
+    split_for_fat32 = None  # type: ignore
+    FFMPEG = None
+    MANAGER = None
+
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -79,7 +97,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(probe_env())
 
         if p == "/api/jobs":
-            return self._json({"jobs": MANAGER.all(), "default_dir": str(DEFAULT_OUT)})
+            return self._json({"jobs": MANAGER.all() if MANAGER else [],
+                               "default_dir": str(DEFAULT_OUT),
+                               "serverless": _VERCEL})
 
         if p == "/api/target":
             path = (q.get("path") or [str(DEFAULT_OUT)])[0]
@@ -121,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self._read_json()
 
         if p == "/api/info":
+            if not MANAGER:
+                return self._json({"error": "Serverless mode: YouTube downloading is not available here. Please run HDTube locally."}, 503)
             url = (body.get("url") or "").strip()
             if not url:
                 return self._json({"error": "Paste a YouTube link first."}, 400)
@@ -130,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(e)[:300]}, 400)
 
         if p == "/api/download":
+            if not MANAGER:
+                return self._json({"error": "Serverless mode: downloads are not available here. Please run HDTube locally."}, 503)
             urls = body.get("urls") or ([body["url"]] if body.get("url") else [])
             urls = [u for u in urls if isinstance(u, str) and u.strip()]
             if not urls:
@@ -148,10 +172,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ids": ids})
 
         if p == "/api/cancel":
-            MANAGER.cancel(body.get("id") or "")
+            if MANAGER:
+                MANAGER.cancel(body.get("id") or "")
             return self._json({"ok": True})
 
         if p == "/api/split":
+            if not split_for_fat32:
+                return self._json({"error": "Serverless mode: file splitting is not available here."}, 503)
             fp = body.get("path") or ""
             try:
                 parts = split_for_fat32(fp)
