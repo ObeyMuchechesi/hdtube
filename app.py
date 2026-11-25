@@ -171,14 +171,22 @@ def sys_platform_ok() -> bool:
     return os.name != "nt"
 
 
-def run(port: int = 7788, open_browser: bool = True):
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    url = f"http://127.0.0.1:{port}/"
+def run(port: int | None = None, open_browser: bool = True):
+    # Hosting platforms (Render, Railway, Fly, Heroku) inject PORT and expect the
+    # process to bind 0.0.0.0. Locally we stay on loopback so nothing is exposed.
+    env_port = os.environ.get("PORT")
+    if port is None:
+        port = int(env_port) if env_port else 7788
+    host = "0.0.0.0" if env_port else os.environ.get("HDTUBE_HOST", "127.0.0.1")
+    local = host in ("127.0.0.1", "localhost")
+
+    srv = ThreadingHTTPServer((host, port), Handler)
+    url = f"http://{'127.0.0.1' if local else host}:{port}/"
     print("\n  HDTube is running")
     print(f"  -> {url}")
     print("  ffmpeg:", FFMPEG or "NOT FOUND")
     print("  Close this window to stop.\n")
-    if open_browser:
+    if open_browser and local:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()
@@ -190,3 +198,4 @@ def run(port: int = 7788, open_browser: bool = True):
 
 if __name__ == "__main__":
     run()
+
