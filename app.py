@@ -14,28 +14,28 @@ from urllib.parse import urlparse, parse_qs
 ROOT = Path(__file__).resolve().parent
 UI = ROOT / "ui"
 
-# On a cloud host like Vercel the filesystem is read-only and functions are
-# stateless, so we cannot create a ~/Videos/HDTube output directory eagerly.
-# Use /tmp for writes if PORT is set, otherwise the user's Videos folder.
-if os.environ.get("PORT"):
+# Vercel and similar serverless platforms provide a read-only filesystem and no
+# persistent process. Detect them via the VERCEL env var (or PORT for other hosts)
+# so the module can import without crashing on a mkdir in a read-only home dir.
+_IS_SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+if _IS_SERVERLESS or os.environ.get("PORT"):
     DEFAULT_OUT = Path("/tmp/hdtube-out")
-    _VERCEL = True
 else:
     DEFAULT_OUT = Path.home() / "Videos" / "HDTube"
-    _VERCEL = False
 
+_import_err: str | None = None
 try:
     from downloader import JobManager, probe_env, inspect_target, split_for_fat32, FFMPEG
     MANAGER = JobManager(DEFAULT_OUT)
-except Exception as _import_err:
+except Exception as _err:
     # Degrade gracefully on serverless hosts where yt-dlp/ffmpeg cannot import
+    _import_err = str(_err)
     JobManager = None  # type: ignore
-    probe_env = lambda: {"yt_dlp": False, "ffmpeg": None, "error": str(_import_err)}  # type: ignore
-    inspect_target = lambda path: {"error": str(_import_err)}  # type: ignore
+    probe_env = lambda: {"yt_dlp": False, "ffmpeg": None, "error": _import_err or "unavailable"}  # type: ignore
+    inspect_target = lambda path: {"error": _import_err or "unavailable"}  # type: ignore
     split_for_fat32 = None  # type: ignore
     FFMPEG = None
     MANAGER = None
-
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -99,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/jobs":
             return self._json({"jobs": MANAGER.all() if MANAGER else [],
                                "default_dir": str(DEFAULT_OUT),
-                               "serverless": _VERCEL})
+                               "serverless": _IS_SERVERLESS or os.environ.get("PORT") is not None})
 
         if p == "/api/target":
             path = (q.get("path") or [str(DEFAULT_OUT)])[0]
