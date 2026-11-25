@@ -86,8 +86,15 @@
   .banner.low{background:var(--ok-soft);border-color:#cfe6da;color:#14583a}
   .banner.warn{background:var(--warn-soft);border-color:#f0dcb4;color:#6f4400}
   .banner.unknown{background:var(--sunk);border-color:var(--line);color:var(--muted)}
+  .banner.cloud{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
   .banner .meta{font:11.5px var(--mono);margin-top:7px;opacity:.85}
   .banner .splitbtn{margin-top:9px}
+
+  /* ---- serverless notice ---- */
+  .serverless-bar{border-radius:10px;padding:14px 16px;background:var(--bad-soft);border:1px solid #f3cdc8;
+                  color:#7a1e16;margin-bottom:18px;font-size:13.5px;line-height:1.55}
+  .serverless-bar b{font-weight:650}
+  .serverless-bar code{font:12px var(--mono);background:#fff7;border-radius:5px;padding:2px 6px}
 
   /* ---- jobs ---- */
   .job{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;gap:13px;align-items:flex-start}
@@ -133,6 +140,13 @@
     </div>
     <div class="env" id="env"></div>
   </header>
+
+  <div id="serverlessNotice" class="serverless-bar" style="display:none">
+    <b>You are viewing the hosted preview.</b> Downloads only work when HDTube runs on your own computer,
+    because it needs access to your files, your USB drive, and a long-running download process.
+    <br>
+    Run it locally: <code>git clone https://github.com/ObeyMuchechesi/hdtube.git</code> then <code>HDTube.bat</code> (Windows) or <code>./hdtube.sh</code> (Mac/Linux).
+  </div>
 
   <!-- URL -->
   <section class="card">
@@ -350,6 +364,13 @@ $("#startBtn").onclick = async () => {
 /* ---------- polling ---------- */
 async function poll(){
   const r = await api("/api/jobs");
+  if(r.serverless){
+    $("#serverlessNotice").style.display = "block";
+    $("#startBtn").disabled = true;
+    $("#browseBtn").disabled = true;
+  } else {
+    $("#serverlessNotice").style.display = "none";
+  }
   if(r.default_dir && !$("#outdir").value){
     $("#outdir").value = r.default_dir; checkTarget();
   }
