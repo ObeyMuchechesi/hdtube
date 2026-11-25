@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HDTube — lossless YouTube downloads</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --panel:#ffffff; --ink:#141413; --muted:#6b6b66;
+    --line:#e3e2dd; --sunk:#f1f0ec;
+    --accent:#c0392b; --accent-ink:#ffffff; --accent-soft:#fbeae8;
+    --ok:#1f7a4d; --ok-soft:#e6f4ec; --warn:#a86400; --warn-soft:#fdf1dc;
+    --bad:#b3261e; --bad-soft:#fbe9e7;
+    --radius:12px; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 22px 80px}
+
+  /* ---- header ---- */
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .mark{width:38px;height:38px;border-radius:10px;background:var(--accent);display:grid;place-items:center;flex:0 0 auto}
+  .mark svg{width:19px;height:19px;fill:#fff}
+  h1{font-size:19px;margin:0;letter-spacing:-.015em;font-weight:650}
+  .tag{font-size:12.5px;color:var(--muted);margin-top:1px}
+  .env{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  .chip{font:11.5px/1 var(--mono);padding:6px 9px;border-radius:999px;background:var(--panel);
+        border:1px solid var(--line);color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .dot.bad{background:var(--bad)}
+
+  /* ---- cards ---- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .card + .card{margin-top:16px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+           margin:0 0 13px;font-weight:650}
+
+  /* ---- url input ---- */
+  .urlrow{display:flex;gap:9px}
+  textarea#urls{
+    flex:1;min-height:84px;resize:vertical;padding:12px 14px;border:1px solid var(--line);
+    border-radius:9px;background:var(--sunk);font:14px/1.5 var(--mono);color:var(--ink);outline:none;
+  }
+  textarea#urls:focus{border-color:#c9c8c2;background:#fff}
+
+  button{font:inherit;cursor:pointer;border-radius:9px;border:1px solid var(--line);
+         background:var(--panel);color:var(--ink);padding:9px 15px;transition:.12s}
+  button:hover:not(:disabled){border-color:#cbcac4}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  button.primary:hover:not(:disabled){background:#a83224;border-color:#a83224}
+  button.ghost{background:transparent}
+  button.sm{padding:6px 11px;font-size:13px}
+
+  /* ---- mode picker ---- */
+  .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+  .mode{position:relative;border:1px solid var(--line);border-radius:10px;padding:13px 14px;cursor:pointer;
+        background:var(--panel);transition:.12s}
+  .mode:hover{border-color:#cbcac4}
+  .mode input{position:absolute;opacity:0;pointer-events:none}
+  .mode .t{font-weight:620;font-size:13.5px;display:flex;align-items:center;gap:7px}
+  .mode .d{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+  .mode.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent) inset}
+  .badge{font:10px/1 var(--mono);padding:3px 6px;border-radius:5px;background:var(--ok-soft);color:var(--ok);
+         border:1px solid #cfe6da;text-transform:uppercase;letter-spacing:.04em}
+
+  /* ---- settings grid ---- */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  label.f{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px;font-weight:600}
+  select,input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+        background:var(--sunk);font:14px inherit;color:var(--ink);outline:none}
+  select:focus,input[type=text]:focus{border-color:#c9c8c2;background:#fff}
+  .pathrow{display:flex;gap:8px}
+
+  /* ---- flash banner ---- */
+  .banner{border-radius:10px;padding:13px 15px;display:flex;gap:12px;align-items:flex-start;
+          font-size:13.5px;line-height:1.5;border:1px solid transparent;margin-top:14px}
+  .banner .ico{flex:0 0 auto;margin-top:1px}
+  .banner b{font-weight:650}
+  .banner.high{background:var(--bad-soft);border-color:#f3cdc8;color:#7a1e16}
+  .banner.low{background:var(--ok-soft);border-color:#cfe6da;color:#14583a}
+  .banner.warn{background:var(--warn-soft);border-color:#f0dcb4;color:#6f4400}
+  .banner.unknown{background:var(--sunk);border-color:var(--line);color:var(--muted)}
+  .banner .meta{font:11.5px var(--mono);margin-top:7px;opacity:.85}
+  .banner .splitbtn{margin-top:9px}
+
+  /* ---- jobs ---- */
+  .job{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;gap:13px;align-items:flex-start}
+  .job + .job{margin-top:10px}
+  .job img{width:104px;height:59px;object-fit:cover;border-radius:7px;background:var(--sunk);flex:0 0 auto}
+  .job .body{flex:1;min-width:0}
+  .job .title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .job .sub{font:11.5px var(--mono);color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+  .bar{height:5px;border-radius:99px;background:var(--sunk);margin-top:10px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+  .job.done .bar > i{background:var(--ok)}
+  .job.error .bar > i{background:var(--bad)}
+  .job .actions{display:flex;gap:7px;align-items:center;flex:0 0 auto}
+  .state{font:11px var(--mono);padding:3px 7px;border-radius:5px;background:var(--sunk);color:var(--muted);
+         text-transform:uppercase;letter-spacing:.04em}
+  .state.done{background:var(--ok-soft);color:var(--ok)}
+  .state.error{background:var(--bad-soft);color:var(--bad)}
+  .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:20px 0}
+
+  .hint{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.55}
+  .hint code{font-family:var(--mono);font-size:11.5px;background:var(--sunk);padding:1px 5px;border-radius:4px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(120%);
+         background:var(--ink);color:#fff;padding:11px 18px;border-radius:9px;font-size:13.5px;
+         transition:transform .25s;z-index:50;max-width:80vw}
+  .toast.on{transform:translateX(-50%) translateY(0)}
+  @media (max-width:760px){
+    .modes{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}
+    .job img{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="mark"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+      <div>
+        <h1>HDTube</h1>
+        <div class="tag">Downloads at source quality — no re-encoding unless you ask for it</div>
+      </div>
+    </div>
+    <div class="env" id="env"></div>
+  </header>
+
+  <!-- URL -->
+  <section class="card">
+    <h2>Links</h2>
+    <div class="urlrow">
+      <textarea id="urls" placeholder="Paste one or more YouTube links, one per line&#10;https://www.youtube.com/watch?v=..."></textarea>
+    </div>
+    <div class="row" style="margin-top:11px">
+      <button class="ghost sm" id="pasteBtn">Paste from clipboard</button>
+      <button class="ghost sm" id="clearBtn">Clear</button>
+    </div>
+  </section>
+
+  <!-- Profile -->
+  <section class="card">
+    <h2>Quality profile</h2>
+    <div class="modes" id="modes">
+      <label class="mode sel" data-mode="universal">
+        <input type="radio" name="mode" value="universal" checked>
+        <div class="t">Universal HD <span class="badge">flash-safe</span></div>
+        <div class="d">MP4 + H.264. Plays on TVs, car stereos, consoles, phones. Encoded once at visually-lossless CRF 18.</div>
+      </label>
+      <label class="mode" data-mode="native">
+        <input type="radio" name="mode" value="native">
+        <div class="t">Pure native <span class="badge">zero re-encode</span></div>
+        <div class="d">Bit-for-bit the stream YouTube served, muxed only. Best fidelity, needs VP9/AV1 support.</div>
+      </label>
+      <label class="mode" data-mode="audio">
+        <input type="radio" name="mode" value="audio">
+        <div class="t">Audio only</div>
+        <div class="d">Original audio track, remuxed to .m4a with no quality loss.</div>
+      </label>
+    </div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div>
+        <label class="f">Resolution cap</label>
+        <select id="quality">
+          <option value="best" selected>Max available (up to 8K)</option>
+          <option value="2160">4K — 2160p</option>
+          <option value="1440">1440p</option>
+          <option value="1080">1080p</option>
+          <option value="720">720p</option>
+        </select>
+      </div>
+      <div>
+        <label class="f">Codec for Universal profile</label>
+        <select id="codec">
+          <option value="h264" selected>H.264 — universal compatibility</option>
+          <option value="hevc">H.265 / HEVC — half the size, modern devices</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label class="f">Save to (USB drive, external disk or folder)</label>
+      <div class="pathrow">
+        <input type="text" id="outdir" placeholder="Choose a folder">
+        <button id="browseBtn">Browse…</button>
+      </div>
+    </div>
+
+    <div id="flashBanner"></div>
+  </section>
+
+  <!-- Download -->
+  <section class="card">
+    <div class="row">
+      <h2 style="margin:0">Queue</h2>
+      <button class="primary" id="startBtn">Download</button>
+    </div>
+    <div id="jobs" style="margin-top:14px">
+      <div class="empty">Nothing queued yet.</div>
+    </div>
+  </section>
+
+  <p class="hint">
+    Keep this window open while downloading. Files land in the folder above —
+    nothing is uploaded anywhere, the app talks only to YouTube.
+  </p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { outdir: "", target: null, jobs: {}, mode: "universal" };
+let toastTimer;
+
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove("on"), 2600);
+}
+const fmtBytes = n => {
+  if(!n) return "0 B";
+  const u = ["B","KB","MB","GB","TB"]; let i = 0; n = Number(n);
+  while(n >= 1024 && i < u.length-1){ n /= 1024; i++; }
+  return n.toFixed(n < 10 && i > 0 ? 1 : 0) + " " + u[i];
+};
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+/* ---------- environment ---------- */
+async function loadEnv(){
+  const e = await api("/api/env");
+  const okY = e.yt_dlp, okF = !!e.ffmpeg;
+  $("#env").innerHTML =
+    `<span class="chip"><span class="dot ${okY?"":"bad"}"></span>yt-dlp ${e.yt_dlp_version||"missing"}</span>` +
+    `<span class="chip"><span class="dot ${okF?"":"bad"}"></span>ffmpeg ${okF?"ready":"missing"}</span>`;
+  if(!okY || !okF) toast("Missing dependency — run setup first.");
+}
+
+/* ---------- target folder + filesystem check ---------- */
+async function checkTarget(){
+  const p = $("#outdir").value.trim();
+  if(!p) return;
+  state.outdir = p;
+  const t = await api("/api/target?path=" + encodeURIComponent(p));
+  state.target = t;
+  renderBanner(t);
+}
+
+function renderBanner(t){
+  const el = $("#flashBanner");
+  if(!t || !t.ok){
+    el.innerHTML = `<div class="banner unknown"><div class="ico">●</div><div>
+      <b>Folder not reachable.</b><div class="meta">${esc(t && t.error || "")}</div></div></div>`;
+    return;
+  }
+  const fs = (t.fs || "unknown").toUpperCase();
+  const free = t.free ? fmtBytes(t.free) : "?";
+  const meta = `${fs}${t.label ? " · " + esc(t.label) : ""} ${t.removable ? "· removable drive" : ""} · ${free} free`;
+
+  let cls = "unknown", icon = "●", head = "Filesystem not identified";
+  if(t.risk === "low"){
+    cls = "low"; icon = "✓"; head = `<b>${fs}</b> has no per-file size limit — full-quality files will copy across intact.`;
+  } else if(t.risk === "high"){
+    cls = "high"; icon = "!";
+    head = `<b>${fs}</b> limits every file to <b>${fmtBytes(t.max_file_size)}</b>. ` +
+           `A long 4K video will exceed that and the copy will fail partway.`;
+  } else {
+    cls = "warn"; head = esc(t.advice || "");
+  }
+
+  let extra = "";
+  if(t.risk === "high"){
+    extra = `<div class="splitbtn"><button class="sm" onclick="reformatTip()">How to fix this →</button></div>`;
+  }
+  el.innerHTML = `<div class="banner ${cls}">
+      <div class="ico">${icon}</div>
+      <div>${head}<div class="meta">${meta}</div>${extra}</div>
+    </div>`;
+}
+
+function reformatTip(){
+  toast("Format the drive as exFAT in Windows: right-click drive → Format → exFAT. Takes seconds, removes the 4 GB wall.");
+}
+
+/* ---------- folder picker ---------- */
+$("#browseBtn").onclick = async () => {
+  toast("Opening folder picker…");
+  const r = await api("/api/browse");
+  if(r.path){ $("#outdir").value = r.path; checkTarget(); }
+};
+$("#outdir").addEventListener("change", checkTarget);
+
+/* ---------- mode picker ---------- */
+$("#modes").addEventListener("click", e => {
+  const m = e.target.closest(".mode"); if(!m) return;
+  document.querySelectorAll(".mode").forEach(x => x.classList.remove("sel"));
+  m.classList.add("sel");
+  m.querySelector("input").checked = true;
+  state.mode = m.dataset.mode;
+  $("#quality").disabled = state.mode === "audio";
+  $("#codec").disabled   = state.mode !== "universal";
+});
+
+/* ---------- paste ---------- */
+$("#pasteBtn").onclick = async () => {
+  try{
+    const t = await navigator.clipboard.readText();
+    if(t) { $("#urls").value = (($("#urls").value.trim() + "\n" + t).trim()); }
+  }catch(e){ toast("Clipboard blocked — paste with Ctrl+V instead."); }
+};
+$("#clearBtn").onclick = () => { $("#urls").value = ""; $("#urls").focus(); };
+
+/* ---------- start ---------- */
+$("#startBtn").onclick = async () => {
+  const raw = $("#urls").value.trim();
+  if(!raw){ toast("Paste a link first."); $("#urls").focus(); return; }
+  const urls = raw.split(/[\n\s]+/).map(s=>s.trim()).filter(Boolean);
+  const out = $("#outdir").value.trim();
+  if(!out){ toast("Choose a destination folder."); return; }
+
+  $("#startBtn").disabled = true;
+  const r = await api("/api/download", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      urls, outdir: out, mode: state.mode,
+      quality: $("#quality").value, codec: $("#codec").value
+    })
+  });
+  $("#startBtn").disabled = false;
+
+  if(r.error){ toast(r.error); return; }
+  $("#urls").value = "";
+  toast(urls.length > 1 ? `Queued ${urls.length} downloads` : "Download started");
+  poll();
+};
+
+/* ---------- polling ---------- */
+async function poll(){
+  const r = await api("/api/jobs");
+  if(r.default_dir && !$("#outdir").value){
+    $("#outdir").value = r.default_dir; checkTarget();
+  }
+  renderJobs(r.jobs || []);
+}
+
+function renderJobs(jobs){
+  const box = $("#jobs");
+  if(!jobs.length){ box.innerHTML = `<div class="empty">Nothing queued yet.</div>`; return; }
+
+  box.innerHTML = jobs.map(j => {
+    const pct = j.status === "done" ? 100 : (j.progress || 0);
+    const stTxt = {downloading:"downloading", merging:"merging", converting:"encoding",
+                   done:"done", error:"error", queued:"queued", cancelled:"cancelled"}[j.status] || j.status;
+
+    const bits = [];
+    if(j.resolution) bits.push(j.resolution);
+    if(j.container)  bits.push(j.container);
+    if(j.vcodec)     bits.push(j.vcodec);
+    if(j.acodec)     bits.push(j.acodec);
+    if(j.filesize)   bits.push(fmtBytes(j.filesize));
+    else if(j.total_bytes) bits.push(fmtBytes(j.total_bytes));
+    if(j.speed && j.status !== "done") bits.push(j.speed);
+    if(j.eta && j.status !== "done")   bits.push(j.eta + " left");
+
+    let actions = "";
+    if(j.status === "done" && j.filepath){
+      actions = `<button class="sm" onclick="reveal('${encodeURIComponent(j.filepath)}')">Show</button>`;
+      if(state.target && state.target.max_file_size && j.filesize > state.target.max_file_size){
+        actions += `<button class="sm" onclick="splitFile('${encodeURIComponent(j.filepath)}')">Split for FAT32</button>`;
+      }
+    } else if(["downloading","merging","converting","queued"].includes(j.status)){
+      actions = `<button class="sm ghost" onclick="cancel('${j.id}')">Stop</button>`;
+    } else if(j.status === "error"){
+      actions = `<span class="sub" style="color:var(--bad)">${esc(j.message).slice(0,90)}</span>`;
+    }
+
+    const thumb = j.thumbnail
+      ? `<img src="${esc(j.thumbnail)}" alt="" referrerpolicy="no-referrer">`
+      : `<div style="width:104px;height:59px;border-radius:7px;background:var(--sunk);flex:0 0 auto"></div>`;
+
+    const meta = bits.map(b=>`<span>${esc(b)}</span>`).join("");
+    return `<div class="job ${j.status}">
+      ${thumb}
+      <div class="body">
+        <div class="title">${esc(j.title)}</div>
+        <div class="sub">
+          <span class="state ${j.status}">${stTxt}</span>
+          ${j.status === "downloading" || j.status === "merging" || j.status === "converting"
+              ? `<span>${pct.toFixed(1)}%</span>` : ""}
+          ${meta}
+        </div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+      </div>
+      <div class="actions">${actions}</div>
+    </div>`;
+  }).join("");
+}
+
+async function cancel(id){ await api("/api/cancel", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); }
+async function reveal(p){ await api("/api/reveal?path=" + p); }
+async function splitFile(p){
+  toast("Splitting into <4 GB parts…");
+  const r = await api("/api/split", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path: decodeURIComponent(p)})});
+  toast(r.ok ? `Done — ${r.count} parts in the _parts folder (with JOIN_PARTS.bat)` : (r.error || "Split failed"));
+}
+
+/* ---------- boot ---------- */
+loadEnv();
+poll();
+checkTarget();
+setInterval(poll, 900);
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Downloaded media / test artifacts
+_ui_test/
+_test_out*/
+*_parts/
+*.part[0-9][0-9][0-9].mkv
+*.mp4
+*.mkv
+*.webm
+*.m4a
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local config
+*.log
